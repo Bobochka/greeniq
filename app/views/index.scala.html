@@ -1,0 +1,220 @@
+@import play.api.mvc.RequestHeader
+
+
+@(hubs: List[Hub])( implicit request: RequestHeader)
+
+@main(title = "Hub list") {
+    <h1>Hubs</h1>
+
+    <div class="flash">
+    @request.flash.get("success").map { message =>
+        <div class="alert alert-success">
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+            @message
+        </div>
+    }
+    </div>
+
+
+    <div class="pull-right">
+    @helper.form(routes.Hubs.newHub) {
+        <input type="submit" value="Create Hub" class="btn btn-success btn-new-hub">
+    }
+    </div>
+
+    <table class="table table-striped">
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>IP</th>
+            <th colspan="3">Actions</th>
+        </tr>
+
+        @hubs.map { hub =>
+            <tr data-id="@hub.id.getOrElse(0)" data-ws-url="@routes.Hubs.analyseHub(hub.id.getOrElse(0)).webSocketURL()">
+                <td>@hub.name</td>
+                <td>@hub.description</td>
+                <td class="ip">@hub.ip</td>
+                <td>
+                    @helper.form(routes.Hubs.editHub(hub.id.get)) {
+                        <input type="submit" value="Edit" class="btn btn-link">
+                    }
+                </td>
+                <td>
+                    @helper.form(routes.Hubs.deleteHub(hub.id.get), 'onsubmit -> "return confirm(\"Are you sure?\")") {
+                        <input type="submit" value="Delete" class="btn btn-link">
+                        }
+                </td>
+                <td>
+                    <button class="btn btn-link btn-analyse">Analyse</button>
+                </td>
+            </tr>
+        }
+
+    </table>
+
+
+    <div class="row analysis-progress">
+        <h3>Analysis progress for hub <span id="analysed-hub-ip"></span></h3>
+        <div class="progress"></div>
+    </div>
+
+
+
+    <script>
+
+        function getSocket(socket, url) {
+            if (typeof socket !== 'undefined') {
+                stopAnalysis(socket);
+            }
+            var ws = window['MozWebSocket'] ? MozWebSocket : WebSocket;
+            return new ws(url);
+        }
+
+        function startAnalysis(socket, ip) {
+            attempts = 0;
+            send(socket, "start");
+
+            // flush previous results
+            $('.progress').html('');
+
+            // show progress div
+            $('#analysed-hub-ip').html(ip);
+            $('.analysis-progress').show();
+        }
+
+        function stopAnalysis(socket) {
+            sock.close();
+        }
+
+        function receiveEvent(event) {
+            console.log(event.data);
+
+            attempts++;
+
+            var klass = 'danger';
+            if (event.data == 'true') {
+                klass = 'success';
+            }
+
+            var $bar = $('<div class="progress-bar progress-bar-' + klass + '" role="progressbar" style="width:10%">');
+            $('.progress').append($bar);
+
+            if (attempts == 10) {
+                stopAnalysis(this);
+            }
+        }
+
+        function send(socket, msg) {
+            waitForSocketConnection(socket, function() {
+                socket.send(msg);
+            });
+        };
+
+        function waitForSocketConnection(socket, callback){
+            setTimeout(function(){
+                if (socket.readyState === 1) {
+                    if(callback !== undefined) {
+                        callback();
+                    }
+                    return;
+                } else {
+                    waitForSocketConnection(socket, callback);
+                }
+            }, 5);
+        };
+
+        var sock;
+        var attempts = 0;
+        var analysed_id;
+
+        $(document).ready(function() {
+            /*
+            $(".btn-analyse").click(function() {
+                var $row = $(this).closest("tr");
+                var url = $row.data("ws-url");
+                var ip = $row.find('.ip').first().html();
+
+                analysed_id = $row.data("id");
+
+                $row.addClass('info');
+
+                // change button to abort
+                $(this).html('Abort');
+                $(this).removeClass('btn-analyse');
+                $(this).addClass('btn-analysis-abort');
+
+                sock = getSocket(sock, url);
+                sock.onmessage = receiveEvent;
+
+                startAnalysis(sock, ip);
+            });
+            */
+            $('td').on('click', 'button.btn-link', function() {
+                var $row = $(this).closest("tr");
+                $row.toggleClass('info');
+
+                if ($(this).html() == 'Analyse') {
+                    var url = $row.data("ws-url");
+                    var ip = $row.find('.ip').first().html();
+
+                    if (analysed_id !== undefined) {
+                        console.log('analysed smth before');
+                        var $prev_row_analysed = $('tr[data-id="' + analysed_id + '"]');
+                        var $prev_btn = $prev_row_analysed.find('button.btn-link');
+
+                        console.log($prev_row_analysed);
+                        if ($prev_btn.html() == 'Abort') {
+                            toggleAnalyse($prev_btn, 'Analyse', 'btn-analysis-abort', 'btn-analyse');
+                            $prev_row_analysed.toggleClass('info');
+                        }
+                    }
+//                    $('button.btn-link').each(function() {
+//                        if ($(this).html() == 'Abort') {
+//                            toggleAnalyse($(this), 'Analyse', 'btn-analysis-abort', 'btn-analyse');
+//                        }
+//                    });
+
+                    analysed_id = $row.data("id");
+
+                    // change button to abort
+                    toggleAnalyse($(this), 'Abort', 'btn-analyse', 'btn-analysis-abort');
+
+                    sock = getSocket(sock, url);
+                    sock.onmessage = receiveEvent;
+
+                    startAnalysis(sock, ip);
+                } else {
+                    toggleAnalyse($(this), 'Analyse', 'btn-analysis-abort', 'btn-analyse');
+
+                    stopAnalysis(sock);
+                }
+            });
+
+            function toggleAnalyse($button, html, classToAdd, classToRemove) {
+                $button.html(html);
+                $button.addClass(classToAdd);
+                $button.removeClass(classToRemove);
+            }
+
+            function confirmDelete() {
+                return confirm("Are you sure?");
+            }
+
+            /*
+            $(".btn-analysis-abort").click(function() {
+                var $row = $(this).closest("tr");
+                $row.removeClass('info');
+
+                $(this).html('Analyse');
+                $(this).removeClass('btn-analysis-abort');
+                $(this).addClass('btn-analyse');
+
+                stopAnalysis(sock);
+            });
+            */
+        });
+
+
+    </script>
+}

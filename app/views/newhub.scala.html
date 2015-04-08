@@ -1,0 +1,44 @@
+@(hubForm: Form[Hub])
+
+@import helper._
+
+@main("Todo list") {
+
+  <h1>Create new hub</h1><br>
+
+  @form(action = routes.Hubs.createHub, 'class -> "form-horizontal") {
+
+    @text(hubForm("name"),
+      label = "Name",
+      placeholder = "Hub Name",
+      help = "(required)"
+    )
+
+    @text(hubForm("description"),
+      label = "Description",
+      placeholder = "Hub Description",
+      help = "(required)"
+    )
+
+    @text(hubForm("ip"),
+      label = "Hub IP",
+      placeholder = "IP Address",
+      help = "(required)"
+    )
+
+    <div class="control-group">
+      <div class="col-md-offset-2">
+        <input type="submit" value="Create" class="btn btn-primary">
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="col-md-offset-2">
+        <a href="@routes.Hubs.index" class="link-back">Back</a>
+      </div>
+    </div>
+
+
+
+  }
+}
